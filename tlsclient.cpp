@@ -31,8 +31,8 @@ int main(int argc, char* argv[]) {
         TLSZmq *tls = new TLSZmq(ssl_context);
 
         bool loop = true;
-        zmq::message_t request (12);  
-        memcpy(request.data(), "hello world!", 12);
+        zmq::message_t request (13);
+        memcpy(request.data(), "hello world!", 13);
 
         printf("Sending - [%s]\n",(char *)(request.data()));
         tls->write(&request);

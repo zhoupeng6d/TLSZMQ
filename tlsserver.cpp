@@ -44,7 +44,7 @@ int main(int argc, char* argv[]) {
         while (true) {
             zmq::message_t request(0);
             std::string ident;
-            
+
             // Wait for a message
             ident = read_message(&request, &s1);
 
@@ -60,13 +60,13 @@ int main(int argc, char* argv[]) {
 
             tls->put_data(&request);
             zmq::message_t *data = tls->read();
-            
+
             if (NULL != data) {
                 printf("Received: %s\n",static_cast<char*>(data->data()));
                 zmq::message_t response(8);
                 snprintf ((char *) response.data(), 8 ,"Got it!");
 
-                printf("sending data - [%s]\n", response.data());
+                printf("sending data - [%s]\n", (char*)response.data());
                 tls->write(&response);
                 delete data;
             }

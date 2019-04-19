@@ -1,5 +1,5 @@
 CXX      ?= g++
-CXXFLAGS ?= -g
+CXXFLAGS ?= -g -I../cppzmq-4.3.0/ -lcrypt -lssl
 PKGS     = libzmq openssl
 MY_CXXFLAGS = $$($(PKG_CONFIG) --cflags $(PKGS))
 PKG_CONFIG ?= pkg-config

@@ -10,7 +10,7 @@ TLSZmq::TLSZmq(SSL_CTX *ctx)
     SSL_set_connect_state(ssl);
 }
 
-TLSZmq::TLSZmq( 
+TLSZmq::TLSZmq(
     SSL_CTX *ctx,
     const char *certificate,
     const char *key)
@@ -52,26 +52,26 @@ TLSZmq::~TLSZmq() {
     delete ssl_to_zmq;
 }
 
-void TLSZmq::update() 
+void TLSZmq::update()
 {
     // Copy the data from the ZMQ message to the memory BIO
     if (zmq_to_ssl->size() > 0) {
         int rc = BIO_write(rbio, zmq_to_ssl->data(), zmq_to_ssl->size());
         zmq_to_ssl->rebuild(0);
     }
-    
+
     // If we have app data to send, push it through SSL write, which
-    // will hit the memory BIO. 
+    // will hit the memory BIO.
     if (app_to_ssl->size() > 0) {
         int rc = SSL_write(ssl, app_to_ssl->data(), app_to_ssl->size());
-        
+
         check_ssl_(rc);
 
         if ( rc == app_to_ssl->size() ) {
         	app_to_ssl->rebuild(0);
         }
 	}
-    
+
     net_read_();
     net_write_();
 }
@@ -120,9 +120,11 @@ SSL_CTX *TLSZmq::init_ctx(int mode) {
 
     const SSL_METHOD* meth;
     if (SSL_CLIENT == mode) {
-    	meth = SSLv3_client_method ();
+    	//meth = SSLv23_client_method ();
+        meth = TLSv1_2_client_method();
     } else if (SSL_SERVER == mode) {
-    	 meth = SSLv3_server_method ();
+    	//meth = SSLv23_server_method ();
+        meth = TLSv1_2_server_method();
     } else {
     	throw TLSException("Error: Invalid SSL mode. Valid modes are TLSZmq::SSL_CLIENT and TLSZmq::SSL_SERVER");
     }
@@ -131,18 +133,18 @@ SSL_CTX *TLSZmq::init_ctx(int mode) {
     if(!ctxt) {
         ERR_print_errors_fp(stderr);
     }
-    
+
     return ctxt;
 }
 
-void TLSZmq::init_(SSL_CTX *ctxt) 
+void TLSZmq::init_(SSL_CTX *ctxt)
 {
     ssl = SSL_new(ctxt);
-    
+
     rbio = BIO_new(BIO_s_mem());
     wbio = BIO_new(BIO_s_mem());
     SSL_set_bio(ssl, rbio, wbio);
-    
+
     ssl_to_app = new zmq::message_t(0);
     app_to_ssl = new zmq::message_t(0);
     zmq_to_ssl = new zmq::message_t(0);
@@ -160,11 +162,11 @@ void TLSZmq::net_write_() {
             size_t cur_size = nwrite.length();
             nwrite.resize(cur_size + read);
             std::copy(readto, readto + read, nwrite.begin() + cur_size);
-        } 
+        }
 
         if (read != 1024) break;
     }
-    
+
     if (!nwrite.empty()) {
         ssl_to_zmq->rebuild(nwrite.length());
         memcpy(ssl_to_zmq->data(), nwrite.c_str(), nwrite.length());
@@ -193,7 +195,7 @@ void TLSZmq::net_read_() {
 
         break;
     }
-    
+
     if (!aread.empty()) {
         ssl_to_app->rebuild(aread.length());
         memcpy(ssl_to_app->data(), aread.c_str(), aread.length());
