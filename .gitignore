@@ -5,3 +5,6 @@
 tlsserver
 tlsclient
 device
+.vscode/
+build/
+
