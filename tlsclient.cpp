@@ -27,6 +27,7 @@ int main(int argc, char* argv[]) {
     	SSL_CTX *ssl_context = TLSZmq::init_ctx(TLSZmq::SSL_CLIENT);
         zmq::context_t ctx(1);
         zmq::socket_t s1(ctx,ZMQ_REQ);
+        s1.setsockopt(ZMQ_IDENTITY, "client1", 7);
         s1.connect ("tcp://localhost:5556");
         TLSZmq *tls = new TLSZmq(ssl_context);
 

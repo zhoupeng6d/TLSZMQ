@@ -47,6 +47,7 @@ int main(int argc, char* argv[]) {
 
             // Wait for a message
             ident = read_message(&request, &s1);
+            printf("ident:%s\n", ident.c_str());
 
             // Retrieve or create the TLSZmq handler for this client
             TLSZmq *tls;
@@ -58,7 +59,17 @@ int main(int argc, char* argv[]) {
                 tls = conns[ident];
             }
 
-            tls->put_data(&request);
+            try {
+                tls->put_data(&request);
+            }
+            catch (std::exception &e) {
+                /* This TLS may be out of date, so update it. */
+                delete tls;
+                tls = new TLSZmq(ssl_context, s_crt.c_str(), s_key.c_str());
+                conns[ident] = tls;
+                tls->put_data(&request);
+            }
+
             zmq::message_t *data = tls->read();
 
             if (NULL != data) {
