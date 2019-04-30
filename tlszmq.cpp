@@ -4,29 +4,8 @@
 #include "tlszmq.h"
 #include "tlsexception.h"
 
-TLSZmq::TLSZmq(SSL_CTX *ctx)
+TLSZmq::TLSZmq()
 {
-    init_(ctx);
-    SSL_set_connect_state(ssl);
-}
-
-TLSZmq::TLSZmq(
-    SSL_CTX *ctx,
-    const char *certificate,
-    const char *key)
-{
-    int rc = SSL_CTX_use_certificate_file(ctx, certificate, SSL_FILETYPE_PEM);
-    if (rc != 1) {
-        throw TLSException("failed to read credentials.");
-    }
-
-    rc = SSL_CTX_use_PrivateKey_file(ctx, key, SSL_FILETYPE_PEM);
-    if (rc != 1) {
-        throw TLSException("failed to use private key.");
-    }
-
-    init_(ctx);
-    SSL_set_accept_state(ssl);
 }
 
 void TLSZmq::shutdown() {
@@ -102,6 +81,25 @@ zmq::message_t *TLSZmq::get_data() {
     return msg;
 }
 
+void TLSZmq::do_handshake()
+{
+    SSL_do_handshake(ssl);
+    net_write_();
+}
+
+int TLSZmq::get_handshake_status()
+{
+    int rc = SSL_is_init_finished(ssl);
+    if (rc != 1)
+    {
+        return 1;
+    }
+    else
+    {
+        return 0;
+    }
+}
+
 void TLSZmq::put_data(zmq::message_t *msg) {
     zmq_to_ssl->rebuild(msg->data(), msg->size(), NULL, NULL);
     update();
@@ -112,7 +110,8 @@ void TLSZmq::write(zmq::message_t *msg) {
     update();
 }
 
-SSL_CTX *TLSZmq::init_ctx(int mode) {
+void TLSZmq::init(int mode, const std::string &crt, const std::string &key, const std::string &ca, bool verify_peer)
+{
     OpenSSL_add_all_algorithms();
     SSL_library_init();
     SSL_load_error_strings();
@@ -120,26 +119,72 @@ SSL_CTX *TLSZmq::init_ctx(int mode) {
 
     const SSL_METHOD* meth;
     if (SSL_CLIENT == mode) {
-    	//meth = SSLv23_client_method ();
         meth = TLSv1_2_client_method();
     } else if (SSL_SERVER == mode) {
-    	//meth = SSLv23_server_method ();
         meth = TLSv1_2_server_method();
     } else {
     	throw TLSException("Error: Invalid SSL mode. Valid modes are TLSZmq::SSL_CLIENT and TLSZmq::SSL_SERVER");
     }
 
-    SSL_CTX *ctxt = SSL_CTX_new (meth);
-    if(!ctxt) {
+    ctx = SSL_CTX_new (meth);
+    if(!ctx) {
         ERR_print_errors_fp(stderr);
+        throw TLSException("failed to create ctx.");
     }
 
-    return ctxt;
-}
+    if (verify_peer)
+    {
+        if (crt != "")
+        {
+            if (SSL_CTX_use_certificate_file(ctx, crt.c_str(), SSL_FILETYPE_PEM) != 1)
+            {
+                throw TLSException("failed to read credentials.");
+            }
+        }
 
-void TLSZmq::init_(SSL_CTX *ctxt)
-{
-    ssl = SSL_new(ctxt);
+        if (key != "")
+        {
+            if (SSL_CTX_use_PrivateKey_file(ctx, key.c_str(), SSL_FILETYPE_PEM) != 1)
+            {
+                throw TLSException("failed to use private key.");
+            }
+        }
+
+        if(SSL_CTX_check_private_key(ctx) != 1)
+        {
+            throw TLSException("Private and certificate is not matching.");
+        }
+    }
+
+    if (SSL_CLIENT == mode)
+    {
+        if(!SSL_CTX_load_verify_locations(ctx, ca.c_str(), NULL))
+        {
+            ERR_print_errors_fp(stderr);
+            throw TLSException("failed to load verify locations.");
+        }
+
+        SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, NULL);
+        SSL_CTX_set_verify_depth(ctx, 4);
+    }
+
+    if ((SSL_SERVER == mode) && (verify_peer))
+    {
+        if(!SSL_CTX_load_verify_locations(ctx, ca.c_str(), NULL))
+        {
+            ERR_print_errors_fp(stderr);
+            throw TLSException("failed to load verify locations.");
+        }
+
+        SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER, NULL);
+        SSL_CTX_set_verify_depth(ctx, 4);
+    }
+
+    ssl = SSL_new(ctx);
+    if(!ssl)
+	{
+		throw TLSException("Error SSL_new.");
+	}
 
     rbio = BIO_new(BIO_s_mem());
     wbio = BIO_new(BIO_s_mem());
@@ -149,6 +194,14 @@ void TLSZmq::init_(SSL_CTX *ctxt)
     app_to_ssl = new zmq::message_t(0);
     zmq_to_ssl = new zmq::message_t(0);
     ssl_to_zmq = new zmq::message_t(0);
+
+    if (SSL_CLIENT == mode) {
+        SSL_set_connect_state(ssl);
+    } else if (SSL_SERVER == mode) {
+        SSL_set_accept_state(ssl);
+    } else {
+        throw TLSException("Error: Invalid SSL mode. Valid modes are TLSZmq::SSL_CLIENT and TLSZmq::SSL_SERVER");
+    }
 }
 
 void TLSZmq::net_write_() {

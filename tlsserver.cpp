@@ -37,9 +37,6 @@ int main(int argc, char* argv[]) {
         zmq::context_t ctx(1);
         zmq::socket_t s1(ctx,ZMQ_ROUTER);
         s1.bind ("tcp://*:5556");
-        std::string s_crt("server.crt");
-        std::string s_key("server.key");
-        SSL_CTX *ssl_context = TLSZmq::init_ctx(TLSZmq::SSL_SERVER);
 
         while (true) {
             zmq::message_t request(0);
@@ -53,7 +50,8 @@ int main(int argc, char* argv[]) {
             TLSZmq *tls;
             if(conns.find(ident) == conns.end()
             		|| conns.find(ident)->second == NULL) {
-                tls = new TLSZmq(ssl_context, s_crt.c_str(), s_key.c_str());
+                tls = new TLSZmq();
+                tls->init(TLSZmq::SSL_SERVER, "server.crt", "server.key", "ca.crt", true);
                 conns[ident] = tls;
             } else {
                 tls = conns[ident];
@@ -65,9 +63,26 @@ int main(int argc, char* argv[]) {
             catch (std::exception &e) {
                 /* This TLS may be out of date, so update it. */
                 delete tls;
-                tls = new TLSZmq(ssl_context, s_crt.c_str(), s_key.c_str());
+                tls = new TLSZmq();
+                tls->init(TLSZmq::SSL_SERVER, "server.crt", "server.key", "ca.crt", true);
                 conns[ident] = tls;
                 tls->put_data(&request);
+            }
+
+            int handshake_status = tls->get_handshake_status();
+            if (handshake_status == 1)
+            {
+                printf("handshaking...\n");
+                write_message(tls, &s1);
+                continue;
+            }
+            else if (handshake_status < 0)
+            {
+                printf("handshake fatal error.");
+                tls->shutdown();
+                delete tls;
+                conns.erase(ident);
+                continue;
             }
 
             zmq::message_t *data = tls->read();

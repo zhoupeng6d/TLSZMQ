@@ -10,43 +10,43 @@
 #include <zmq.hpp>
 
 class TLSZmq {
-    public:
-	enum {SSL_CLIENT = 0, SSL_SERVER = 1};
-	static SSL_CTX *ssl_ctx;
-	static SSL_CTX *init_ctx(int mode);
+public:
+    enum {SSL_CLIENT = 0, SSL_SERVER = 1};
 
-        TLSZmq(SSL_CTX *ctx);
-        TLSZmq( SSL_CTX *ctx,
-       		const char *certificate,
-                const char *key);
-        virtual ~TLSZmq();
+    TLSZmq();
+    virtual ~TLSZmq();
 
-        bool can_recv();
-        bool needs_write();
-        
-        zmq::message_t *read();
-        void write(zmq::message_t *msg);
+    bool can_recv();
+    bool needs_write();
 
-        zmq::message_t *get_data();
-        void put_data(zmq::message_t *msg);
+    zmq::message_t *read();
+    void write(zmq::message_t *msg);
 
-        void shutdown();
+    zmq::message_t *get_data();
+    void do_handshake();
+    int  get_handshake_status();
+    void put_data(zmq::message_t *msg);
 
-    private:
-        void init_(SSL_CTX *ctxt);
-        void update();
-        void check_ssl_(int ret_code);
-        void net_read_();
-        void net_write_();
+    void shutdown();
 
-        SSL * ssl;
-        BIO * rbio;
-        BIO * wbio;
-        
-        zmq::message_t *app_to_ssl;
-        zmq::message_t *ssl_to_app;
-        zmq::message_t *ssl_to_zmq;
-        zmq::message_t *zmq_to_ssl;
+    /* 0:success 1:not finish -1:fatal error */
+
+    void init(int mode, const std::string &crt, const std::string &key, const std::string &ca, bool verify_peer);
+private:
+    void update();
+    void check_ssl_(int ret_code);
+    void net_read_();
+    void net_write_();
+
+    SSL * ssl;
+    BIO * rbio;
+    BIO * wbio;
+    SSL_CTX *ctx;
+
+    zmq::message_t *app_to_ssl;
+    zmq::message_t *ssl_to_app;
+    zmq::message_t *ssl_to_zmq;
+    zmq::message_t *zmq_to_ssl;
 };
 
 #endif /* _TLSZMQ_H */

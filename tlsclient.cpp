@@ -24,12 +24,12 @@ zmq::message_t *read_message(TLSZmq *tls, zmq::socket_t *socket) {
 
 int main(int argc, char* argv[]) {
     try {
-    	SSL_CTX *ssl_context = TLSZmq::init_ctx(TLSZmq::SSL_CLIENT);
         zmq::context_t ctx(1);
         zmq::socket_t s1(ctx,ZMQ_REQ);
         s1.setsockopt(ZMQ_IDENTITY, "client1", 7);
         s1.connect ("tcp://localhost:5556");
-        TLSZmq *tls = new TLSZmq(ssl_context);
+        TLSZmq *tls = new TLSZmq();
+        tls->init(TLSZmq::SSL_CLIENT, "client.crt", "client.key", "ca.crt", true);
 
         bool loop = true;
         zmq::message_t request (13);
