@@ -10,43 +10,30 @@
 #include <zmq.hpp>
 
 class TLSZmq {
+private:
+    SSL     *ssl;
+    BIO     *rbio;
+    BIO     *wbio;
+    SSL_CTX *ctx;
+
+    void check_ssl_(int ret_code);
+
 public:
     enum {SSL_CLIENT = 0, SSL_SERVER = 1};
 
     TLSZmq();
     virtual ~TLSZmq();
 
-    bool can_recv();
-    bool needs_write();
+    int        put_origin_data(zmq::message_t *msg);
+    std::string get_origin_data();
+    void        put_app_data(const std::string &data);
+    std::string get_app_data();
 
-    zmq::message_t *read();
-    void write(zmq::message_t *msg);
-
-    zmq::message_t *get_data();
     void do_handshake();
-    int  get_handshake_status();
-    void put_data(zmq::message_t *msg);
-
+    int  get_handshake_status(); // 0:success 1:not finish -1:fatal error
     void shutdown();
-
-    /* 0:success 1:not finish -1:fatal error */
-
     void init(int mode, const std::string &crt, const std::string &key, const std::string &ca, bool verify_peer);
-private:
-    void update();
-    void check_ssl_(int ret_code);
-    void net_read_();
-    void net_write_();
 
-    SSL * ssl;
-    BIO * rbio;
-    BIO * wbio;
-    SSL_CTX *ctx;
-
-    zmq::message_t *app_to_ssl;
-    zmq::message_t *ssl_to_app;
-    zmq::message_t *ssl_to_zmq;
-    zmq::message_t *zmq_to_ssl;
 };
 
 #endif /* _TLSZMQ_H */

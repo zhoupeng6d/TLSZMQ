@@ -23,74 +23,20 @@ void TLSZmq::shutdown() {
 
 TLSZmq::~TLSZmq() {
     SSL_free(ssl);
+    SSL_CTX_free(ctx);
     ERR_free_strings();
-
-    delete ssl_to_app;
-    delete app_to_ssl;
-    delete zmq_to_ssl;
-    delete ssl_to_zmq;
-}
-
-void TLSZmq::update()
-{
-    // Copy the data from the ZMQ message to the memory BIO
-    if (zmq_to_ssl->size() > 0) {
-        int rc = BIO_write(rbio, zmq_to_ssl->data(), zmq_to_ssl->size());
-        zmq_to_ssl->rebuild(0);
-    }
-
-    // If we have app data to send, push it through SSL write, which
-    // will hit the memory BIO.
-    if (app_to_ssl->size() > 0) {
-        int rc = SSL_write(ssl, app_to_ssl->data(), app_to_ssl->size());
-
-        check_ssl_(rc);
-
-        if ( rc == app_to_ssl->size() ) {
-        	app_to_ssl->rebuild(0);
-        }
-	}
-
-    net_read_();
-    net_write_();
-}
-
-bool TLSZmq::can_recv() {
-    return ssl_to_app->size() > 0;
-}
-
-bool TLSZmq::needs_write() {
-    return ssl_to_zmq->size() > 0;
-}
-
-zmq::message_t *TLSZmq::read() {
-	if (can_recv()) {
-		zmq::message_t *msg = new zmq::message_t(ssl_to_app->size());
-		memcpy (msg->data(), ssl_to_app->data(), ssl_to_app->size());
-		ssl_to_app->rebuild(0);
-		return msg;
-	} else {
-		return NULL;
-	}
-}
-
-zmq::message_t *TLSZmq::get_data() {
-    zmq::message_t *msg = new zmq::message_t(ssl_to_zmq->size());
-    memcpy (msg->data(), ssl_to_zmq->data(), ssl_to_zmq->size());
-    ssl_to_zmq->rebuild(0);
-    return msg;
 }
 
 void TLSZmq::do_handshake()
 {
-    SSL_do_handshake(ssl);
-    net_write_();
+    int rc = SSL_do_handshake(ssl);
+    printf("do handshage...\n");
+    check_ssl_(rc);
 }
 
 int TLSZmq::get_handshake_status()
 {
-    int rc = SSL_is_init_finished(ssl);
-    if (rc != 1)
+    if (SSL_is_init_finished(ssl) != 1)
     {
         return 1;
     }
@@ -100,15 +46,68 @@ int TLSZmq::get_handshake_status()
     }
 }
 
-void TLSZmq::put_data(zmq::message_t *msg) {
-    zmq_to_ssl->rebuild(msg->data(), msg->size(), NULL, NULL);
-    update();
+int TLSZmq::put_origin_data(zmq::message_t *msg)
+{
+    int ret = BIO_write(rbio, msg->data(), msg->size());
+    if (ret > 0)
+    {
+        return 0;
+    }
+    return -1;
 }
 
-void TLSZmq::write(zmq::message_t *msg) {
-    app_to_ssl->rebuild(msg->data(), msg->size(), NULL, NULL);
-    update();
+std::string TLSZmq::get_origin_data() {
+    std::string nwrite;
+    // Read any data to be written to the network from the memory BIO
+    while (1) {
+        char readto[1024];
+        int read = BIO_read(wbio, readto, 1024);
+
+        if (read > 0) {
+            size_t cur_size = nwrite.length();
+            nwrite.resize(cur_size + read);
+            std::copy(readto, readto + read, nwrite.begin() + cur_size);
+        }
+
+        if (read != 1024) break;
+    }
+
+    return nwrite;
 }
+
+void TLSZmq::put_app_data(const std::string &data)
+{
+    int rc = SSL_write(ssl, data.data(), data.size());
+
+    check_ssl_(rc);
+}
+
+std::string TLSZmq::get_app_data() {
+    std::string aread;
+    // Read data for the application from the encrypted connection and place it in the string for the app to read
+    while (1) {
+        char readto[1024];
+        int read = SSL_read(ssl, readto, 1024);
+
+        check_ssl_(read);
+
+        if (read > 0) {
+            size_t cur_size = aread.length();
+            aread.resize(cur_size + read);
+            std::copy(readto, readto + read, aread.begin() + cur_size);
+            continue;
+        }
+
+		if (SSL_ERROR_ZERO_RETURN == SSL_get_error(ssl, read) ) {
+			SSL_shutdown(ssl);
+		}
+
+        break;
+    }
+    return aread;
+}
+
+
 
 void TLSZmq::init(int mode, const std::string &crt, const std::string &key, const std::string &ca, bool verify_peer)
 {
@@ -126,7 +125,7 @@ void TLSZmq::init(int mode, const std::string &crt, const std::string &key, cons
     	throw TLSException("Error: Invalid SSL mode. Valid modes are TLSZmq::SSL_CLIENT and TLSZmq::SSL_SERVER");
     }
 
-    ctx = SSL_CTX_new (meth);
+    ctx = SSL_CTX_new(meth);
     if(!ctx) {
         ERR_print_errors_fp(stderr);
         throw TLSException("failed to create ctx.");
@@ -190,11 +189,6 @@ void TLSZmq::init(int mode, const std::string &crt, const std::string &key, cons
     wbio = BIO_new(BIO_s_mem());
     SSL_set_bio(ssl, rbio, wbio);
 
-    ssl_to_app = new zmq::message_t(0);
-    app_to_ssl = new zmq::message_t(0);
-    zmq_to_ssl = new zmq::message_t(0);
-    ssl_to_zmq = new zmq::message_t(0);
-
     if (SSL_CLIENT == mode) {
         SSL_set_connect_state(ssl);
     } else if (SSL_SERVER == mode) {
@@ -202,68 +196,20 @@ void TLSZmq::init(int mode, const std::string &crt, const std::string &key, cons
     } else {
         throw TLSException("Error: Invalid SSL mode. Valid modes are TLSZmq::SSL_CLIENT and TLSZmq::SSL_SERVER");
     }
-}
 
-void TLSZmq::net_write_() {
-    std::string nwrite;
-    // Read any data to be written to the network from the memory BIO
-    while (1) {
-        char readto[1024];
-        int read = BIO_read(wbio, readto, 1024);
-
-        if (read > 0) {
-            size_t cur_size = nwrite.length();
-            nwrite.resize(cur_size + read);
-            std::copy(readto, readto + read, nwrite.begin() + cur_size);
-        }
-
-        if (read != 1024) break;
-    }
-
-    if (!nwrite.empty()) {
-        ssl_to_zmq->rebuild(nwrite.length());
-        memcpy(ssl_to_zmq->data(), nwrite.c_str(), nwrite.length());
-    }
-}
-
-void TLSZmq::net_read_() {
-    std::string aread;
-    // Read data for the application from the encrypted connection and place it in the string for the app to read
-    while (1) {
-        char readto[1024];
-        int read = SSL_read(ssl, readto, 1024);
-
-        check_ssl_(read);
-
-        if (read > 0) {
-            size_t cur_size = aread.length();
-            aread.resize(cur_size + read);
-            std::copy(readto, readto + read, aread.begin() + cur_size);
-            continue;
-        }
-
-		if (SSL_ERROR_ZERO_RETURN == SSL_get_error(ssl, read) ) {
-			SSL_shutdown(ssl);
-		}
-
-        break;
-    }
-
-    if (!aread.empty()) {
-        ssl_to_app->rebuild(aread.length());
-        memcpy(ssl_to_app->data(), aread.c_str(), aread.length());
-    }
 }
 
 void TLSZmq::check_ssl_(int rc) {
     int err = SSL_get_error(ssl, rc);
+
+    printf("err : %d\n", err);
 
     if (err == SSL_ERROR_NONE || err == SSL_ERROR_WANT_READ) {
         return;
     }
 
     if (err == SSL_ERROR_SYSCALL ||
-            err == SSL_ERROR_SSL) {
+            err == SSL_ERROR_SSL || err == SSL_ERROR_ZERO_RETURN) {
         throw TLSException(err);
     }
 
