@@ -1,14 +1,14 @@
 #include <stdexcept>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
-#include "tlszmq.h"
+#include "tls_wrapper.h"
 #include "tlsexception.h"
 
-TLSZmq::TLSZmq()
+TLSWrapper::TLSWrapper()
 {
 }
 
-void TLSZmq::shutdown() {
+void TLSWrapper::shutdown() {
     int ret = SSL_shutdown(ssl);
 
     switch (ret) {
@@ -21,20 +21,19 @@ void TLSZmq::shutdown() {
     }
 }
 
-TLSZmq::~TLSZmq() {
+TLSWrapper::~TLSWrapper() {
     SSL_free(ssl);
     SSL_CTX_free(ctx);
     ERR_free_strings();
 }
 
-void TLSZmq::do_handshake()
+void TLSWrapper::do_handshake()
 {
     int rc = SSL_do_handshake(ssl);
-    printf("do handshage...\n");
     check_ssl_(rc);
 }
 
-int TLSZmq::get_handshake_status()
+int TLSWrapper::get_handshake_status()
 {
     if (SSL_is_init_finished(ssl) != 1)
     {
@@ -46,9 +45,9 @@ int TLSZmq::get_handshake_status()
     }
 }
 
-int TLSZmq::put_origin_data(zmq::message_t *msg)
+int TLSWrapper::put_origin_data(const void *data, size_t size)
 {
-    int ret = BIO_write(rbio, msg->data(), msg->size());
+    int ret = BIO_write(rbio, data, size);
     if (ret > 0)
     {
         return 0;
@@ -56,7 +55,7 @@ int TLSZmq::put_origin_data(zmq::message_t *msg)
     return -1;
 }
 
-std::string TLSZmq::get_origin_data() {
+std::string TLSWrapper::get_origin_data() {
     std::string nwrite;
     // Read any data to be written to the network from the memory BIO
     while (1) {
@@ -75,14 +74,14 @@ std::string TLSZmq::get_origin_data() {
     return nwrite;
 }
 
-void TLSZmq::put_app_data(const std::string &data)
+void TLSWrapper::put_app_data(const void *data, size_t size)
 {
-    int rc = SSL_write(ssl, data.data(), data.size());
+    int rc = SSL_write(ssl, data, size);
 
     check_ssl_(rc);
 }
 
-std::string TLSZmq::get_app_data() {
+std::string TLSWrapper::get_app_data() {
     std::string aread;
     // Read data for the application from the encrypted connection and place it in the string for the app to read
     while (1) {
@@ -109,7 +108,7 @@ std::string TLSZmq::get_app_data() {
 
 
 
-void TLSZmq::init(int mode, const std::string &crt, const std::string &key, const std::string &ca, bool verify_peer)
+void TLSWrapper::init(int mode, const std::string &crt, const std::string &key, const std::string &ca, bool verify_peer)
 {
     OpenSSL_add_all_algorithms();
     SSL_library_init();
@@ -122,7 +121,7 @@ void TLSZmq::init(int mode, const std::string &crt, const std::string &key, cons
     } else if (SSL_SERVER == mode) {
         meth = TLSv1_2_server_method();
     } else {
-    	throw TLSException("Error: Invalid SSL mode. Valid modes are TLSZmq::SSL_CLIENT and TLSZmq::SSL_SERVER");
+    	throw TLSException("Error: Invalid SSL mode. Valid modes are TLSWrapper::SSL_CLIENT and TLSWrapper::SSL_SERVER");
     }
 
     ctx = SSL_CTX_new(meth);
@@ -194,12 +193,12 @@ void TLSZmq::init(int mode, const std::string &crt, const std::string &key, cons
     } else if (SSL_SERVER == mode) {
         SSL_set_accept_state(ssl);
     } else {
-        throw TLSException("Error: Invalid SSL mode. Valid modes are TLSZmq::SSL_CLIENT and TLSZmq::SSL_SERVER");
+        throw TLSException("Error: Invalid SSL mode. Valid modes are TLSWrapper::SSL_CLIENT and TLSWrapper::SSL_SERVER");
     }
 
 }
 
-void TLSZmq::check_ssl_(int rc) {
+void TLSWrapper::check_ssl_(int rc) {
     int err = SSL_get_error(ssl, rc);
 
     printf("err : %d\n", err);

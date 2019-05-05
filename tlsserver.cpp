@@ -1,10 +1,10 @@
-#include "tlszmq.h"
+#include "tls_wrapper.h"
 #include <string>
 #include <map>
 #include <iostream>
 #include <zmq.hpp>
 
-std::map<std::string, TLSZmq*> conns;
+std::map<std::string, TLSWrapper*> conns;
 std::string read_message(zmq::message_t *request, zmq::socket_t *socket) {
     std::string id;
     size_t size;
@@ -25,7 +25,7 @@ std::string read_message(zmq::message_t *request, zmq::socket_t *socket) {
     return id;
 }
 
-void write_message(TLSZmq *tls, zmq::socket_t *socket) {
+void write_message(TLSWrapper *tls, zmq::socket_t *socket) {
     std::string data = tls->get_origin_data();
 
     printf("data.size():%d\n", (int)data.size());
@@ -52,14 +52,14 @@ int main(int argc, char* argv[]) {
             ident = read_message(&request, &s1);
             printf("ident:%s\n", ident.c_str());
 
-            // Retrieve or create the TLSZmq handler for this client
-            TLSZmq *tls = nullptr;
+            // Retrieve or create the TLSWrapper handler for this client
+            TLSWrapper *tls = nullptr;
             std::string app_data;
 
             if(conns.find(ident) == conns.end()
             		|| conns.find(ident)->second == NULL) {
-                tls = new TLSZmq();
-                tls->init(TLSZmq::SSL_SERVER, "server.crt", "server.key", "ca.crt", true);
+                tls = new TLSWrapper();
+                tls->init(TLSWrapper::SSL_SERVER, "server.crt", "server.key", "ca.crt", true);
                 conns[ident] = tls;
                 printf("new\n");
             } else {
@@ -68,7 +68,7 @@ int main(int argc, char* argv[]) {
             }
 
             try {
-                if (tls->put_origin_data(&request) != 0)
+                if (tls->put_origin_data(request.data(), request.size()) != 0)
                 {
                     printf("put origin data error");
                     break;
@@ -113,7 +113,7 @@ int main(int argc, char* argv[]) {
 
                 std::string resp = "Got it";
                 printf("sending data - [%s]\n", (char*)resp.data());
-                tls->put_app_data(resp);
+                tls->put_app_data((void *)resp.data(), resp.size());
                 write_message(tls, &s1);
             }
         }

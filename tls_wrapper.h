@@ -1,15 +1,15 @@
 /*
- * Quick and dirty class to wrap data in TLS for use over ZeroMQ
+ * Quick and dirty class to wrap data in TLS for use over any data channel.
  * Based on code from http://funcptr.net/2012/04/08/openssl-as-a-filter-%28or-non-blocking-openssl%29/
  */
 
-#ifndef _TLSZMQ_H
-#define _TLSZMQ_H
+#ifndef __TLS_WRAPPER_H
+#define __TLS_WRAPPER_H
 
 #include <openssl/ssl.h>
-#include <zmq.hpp>
+#include <string>
 
-class TLSZmq {
+class TLSWrapper {
 private:
     SSL     *ssl;
     BIO     *rbio;
@@ -21,12 +21,12 @@ private:
 public:
     enum {SSL_CLIENT = 0, SSL_SERVER = 1};
 
-    TLSZmq();
-    virtual ~TLSZmq();
+    TLSWrapper();
+    virtual ~TLSWrapper();
 
-    int        put_origin_data(zmq::message_t *msg);
+    int         put_origin_data(const void *data, size_t size);
     std::string get_origin_data();
-    void        put_app_data(const std::string &data);
+    void        put_app_data(const void *data, size_t size);
     std::string get_app_data();
 
     void do_handshake();
@@ -36,4 +36,4 @@ public:
 
 };
 
-#endif /* _TLSZMQ_H */
+#endif /* _TLSWrapper_H */

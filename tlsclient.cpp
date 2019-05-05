@@ -1,8 +1,8 @@
-#include "tlszmq.h"
+#include "tls_wrapper.h"
 #include "unistd.h"
 #include <zmq.hpp>
 
-size_t write_message(TLSZmq *tls, zmq::socket_t *socket) {
+size_t write_message(TLSWrapper *tls, zmq::socket_t *socket) {
     std::string data = tls->get_origin_data();
 
     printf("data.size():%d\n", (int)data.size());
@@ -22,17 +22,17 @@ size_t write_message(TLSZmq *tls, zmq::socket_t *socket) {
 
 void read_message(zmq::message_t *resp, zmq::socket_t *socket) {
 	socket->recv(resp);
-    printf("read.size:%d\n", resp->size());
+    printf("read.size:%d\n", (int)resp->size());
 }
 
 int main(int argc, char* argv[]) {
     try {
         zmq::context_t ctx(1);
         zmq::socket_t s1(ctx,ZMQ_REQ);
-        s1.setsockopt(ZMQ_IDENTITY, "client1", 7);
+        s1.setsockopt(ZMQ_IDENTITY, "client2", 7);
         s1.connect("tcp://localhost:5556");
-        TLSZmq *tls = new TLSZmq();
-        tls->init(TLSZmq::SSL_CLIENT, "client.crt", "client.key", "ca.crt", true);
+        TLSWrapper *tls = new TLSWrapper();
+        tls->init(TLSWrapper::SSL_CLIENT, "client.crt", "client.key", "ca.crt", true);
 
         do {
             tls->do_handshake();
@@ -43,19 +43,19 @@ int main(int argc, char* argv[]) {
             }
 
             zmq::message_t data;
-            printf("12\n");
             read_message(&data, &s1);
-            tls->put_origin_data(&data);
+            tls->put_origin_data(data.data(), data.size());
         } while (tls->get_handshake_status() != 0);
 
         while (true) {
-            printf("Sending - [hello world!]\n");
-            tls->put_app_data("hello world!");
+            std::string msg = "hello world!";
+            printf("Sending - %s\n", msg.c_str());
+            tls->put_app_data((void *)msg.data(), msg.size());
             write_message(tls, &s1);
 
             zmq::message_t data;
             read_message(&data, &s1);
-            tls->put_origin_data(&data);
+            tls->put_origin_data(data.data(), data.size());
             std::string app_data = tls->get_app_data();
 
             if ("" != app_data) {
@@ -67,8 +67,6 @@ int main(int argc, char* argv[]) {
         // send shutdown to peer
 		tls->shutdown();
 		write_message(tls, &s1);
-        zmq::message_t data;
-        read_message(&data, &s1);
 
         delete tls;
     }

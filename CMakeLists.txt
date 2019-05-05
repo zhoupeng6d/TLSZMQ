@@ -22,7 +22,7 @@ ${ZEROMQ_INCLUDE_DIR}/
 )
 
 set(SOURCES
-tlszmq.cpp
+tls_wrapper.cpp
 tlsexception.cpp
 )
 
