@@ -33,7 +33,6 @@ public:
     int  get_handshake_status(); // 0:success 1:not finish -1:fatal error
     void shutdown();
     void init(int mode, const std::string &crt, const std::string &key, const std::string &ca, bool verify_peer);
-
 };
 
-#endif /* _TLSWrapper_H */
+#endif /* __TLS_WRAPPER_H */

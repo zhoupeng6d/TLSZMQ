@@ -106,8 +106,6 @@ std::string TLSWrapper::get_app_data() {
     return aread;
 }
 
-
-
 void TLSWrapper::init(int mode, const std::string &crt, const std::string &key, const std::string &ca, bool verify_peer)
 {
     OpenSSL_add_all_algorithms();
@@ -195,7 +193,6 @@ void TLSWrapper::init(int mode, const std::string &crt, const std::string &key, 
     } else {
         throw TLSException("Error: Invalid SSL mode. Valid modes are TLSWrapper::SSL_CLIENT and TLSWrapper::SSL_SERVER");
     }
-
 }
 
 void TLSWrapper::check_ssl_(int rc) {
