@@ -7,7 +7,7 @@ size_t write_message(TLSWrapper *tls, zmq::socket_t *socket) {
 
     printf("data.size():%d\n", (int)data.size());
 
-    if (data.size() > 0)
+    if (data.size() >= 0)
     {
         zmq::message_t message(data.size());
         memcpy (message.data(), data.data(), data.size());
@@ -34,26 +34,26 @@ int main(int argc, char* argv[]) {
         TLSWrapper *tls = new TLSWrapper();
         tls->init(TLSWrapper::SSL_CLIENT, "client.crt", "client.key", "ca.crt", true);
 
+        zmq::message_t data;
         do {
             tls->do_handshake();
             if (write_message(tls, &s1) == 0)
             {
                 printf("handshake done, status:%d\n", tls->get_handshake_status());
-                break;
+                //break;
             }
 
-            zmq::message_t data;
             read_message(&data, &s1);
             tls->put_origin_data(data.data(), data.size());
         } while (tls->get_handshake_status() != 0);
 
-        while (true) {
+        //while (true) {
             std::string msg = "hello world!";
             printf("Sending - %s\n", msg.c_str());
             tls->put_app_data((void *)msg.data(), msg.size());
             write_message(tls, &s1);
 
-            zmq::message_t data;
+            //zmq::message_t data;
             read_message(&data, &s1);
             tls->put_origin_data(data.data(), data.size());
             std::string app_data = tls->get_app_data();
@@ -62,7 +62,7 @@ int main(int argc, char* argv[]) {
                 printf("Received - [%s]\n",(char *)(app_data.data()));
             }
             sleep(1);
-        }
+        //}
 
         // send shutdown to peer
 		tls->shutdown();

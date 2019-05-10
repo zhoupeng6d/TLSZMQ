@@ -22,6 +22,7 @@ std::string read_message(zmq::message_t *request, zmq::socket_t *socket) {
 
     // read data
     socket->recv(request);
+    printf("read:%d\n", (int)request->size());
     return id;
 }
 
@@ -50,6 +51,10 @@ int main(int argc, char* argv[]) {
 
             // Wait for a message
             ident = read_message(&request, &s1);
+            //if (request.size() <= 0)
+            //{
+            //    continue;
+            //}
             printf("ident:%s\n", ident.c_str());
 
             // Retrieve or create the TLSWrapper handler for this client
@@ -74,7 +79,7 @@ int main(int argc, char* argv[]) {
                     break;
                 }
 
-                if (tls->get_handshake_status() == 0)
+                if ((tls->get_handshake_status() == 0) && (request.size() > 0))
                 {
                     printf("get app data\n");
                     app_data = tls->get_app_data();
@@ -83,6 +88,7 @@ int main(int argc, char* argv[]) {
             catch (std::exception &e) {
                 /* This TLS may be out of date, so update it. */
                 printf("This tls may be out of date.\n");
+                tls->shutdown();
                 write_message(tls, &s1);
                 delete tls;
                 tls = nullptr;
@@ -95,6 +101,12 @@ int main(int argc, char* argv[]) {
             {
                 printf("handshaking...\n");
                 tls->do_handshake();
+                write_message(tls, &s1);
+                continue;
+            }
+            else if ((handshake_status == 0) && (request.size() == 0))
+            {
+                printf("finish\n");
                 write_message(tls, &s1);
                 continue;
             }

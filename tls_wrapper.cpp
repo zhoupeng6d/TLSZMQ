@@ -48,7 +48,7 @@ int TLSWrapper::get_handshake_status()
 int TLSWrapper::put_origin_data(const void *data, size_t size)
 {
     int ret = BIO_write(rbio, data, size);
-    if (ret > 0)
+    if (ret >= 0)
     {
         return 0;
     }
