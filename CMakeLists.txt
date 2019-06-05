@@ -15,6 +15,7 @@ endif()
 
 message(STATUS "openssl libs: ${OPENSSL_LIBRARIES}")
 
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 
 include_directories(
 ${OPENSSL_INCLUDE_DIR}/

@@ -3,9 +3,11 @@
 #include <openssl/err.h>
 #include "tls_wrapper.h"
 #include "tlsexception.h"
+#include "zmqchannel.h"
 
 TLSWrapper::TLSWrapper()
 {
+
 }
 
 void TLSWrapper::shutdown() {
@@ -19,6 +21,9 @@ void TLSWrapper::shutdown() {
         default:
             break;
     }
+
+    std::string my_data = get_origin_data();
+    mp_zmqchannel->write(my_data);
 }
 
 TLSWrapper::~TLSWrapper() {
@@ -27,10 +32,38 @@ TLSWrapper::~TLSWrapper() {
     ERR_free_strings();
 }
 
-void TLSWrapper::do_handshake()
+int TLSWrapper::do_handshake()
 {
+    static int finish_cnt = 0;
+
     int rc = SSL_do_handshake(ssl);
     check_ssl_(rc);
+
+    if (get_handshake_status() == 0)
+    {
+        m_tlsstatus = CONNECTED;
+        printf("connected\r\n");
+        return 0;
+    }
+
+    if (m_tlsmode == SSL_SERVER)
+    {
+        std::string peer_data  = mp_zmqchannel->read();
+        put_origin_data(peer_data.data(), peer_data.size());
+        int rc = SSL_do_handshake(ssl);
+        check_ssl_(rc);
+        std::string my_data = get_origin_data();
+        mp_zmqchannel->write(my_data);
+    }
+    else
+    {
+        std::string my_data = get_origin_data();
+        mp_zmqchannel->write(my_data);
+        std::string peer_data  = mp_zmqchannel->read();
+        put_origin_data(peer_data.data(), peer_data.size());
+    }
+
+    return 1;
 }
 
 int TLSWrapper::get_handshake_status()
@@ -43,6 +76,11 @@ int TLSWrapper::get_handshake_status()
     {
         return 0;
     }
+}
+
+TLSWrapper::TLSStatus TLSWrapper::get_tls_status()
+{
+    return m_tlsstatus;
 }
 
 int TLSWrapper::put_origin_data(const void *data, size_t size)
@@ -106,12 +144,15 @@ std::string TLSWrapper::get_app_data() {
     return aread;
 }
 
-void TLSWrapper::init(int mode, const std::string &crt, const std::string &key, const std::string &ca, bool verify_peer)
+void TLSWrapper::init(const ZMQChannel *pzmqchannel, TLSMode mode, const std::string &crt, const std::string &key, const std::string &ca, bool verify_peer)
 {
     OpenSSL_add_all_algorithms();
     SSL_library_init();
     SSL_load_error_strings();
     ERR_load_BIO_strings();
+
+    mp_zmqchannel = (ZMQChannel *)pzmqchannel;
+    m_tlsmode     = mode;
 
     const SSL_METHOD* meth;
     if (SSL_CLIENT == mode) {
@@ -210,4 +251,20 @@ void TLSWrapper::check_ssl_(int rc) {
     }
 
     return;
+}
+
+std::string TLSWrapper::read()
+{
+    std::string peer_data = mp_zmqchannel->read();
+    put_origin_data(peer_data.data(), peer_data.size());
+
+    return get_app_data();
+}
+
+void TLSWrapper::write(const std::string &data)
+{
+    put_app_data(data.data(), data.size());
+    std::string my_data = get_origin_data();
+
+    mp_zmqchannel->write(my_data);
 }
