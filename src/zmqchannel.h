@@ -47,8 +47,6 @@ public:
         zmq::message_t message;
         mp_socket->recv(&message);
 
-        printf("read:%d\r\n", message.size());
-
         return std::string(static_cast<char*>(message.data()), message.size());
     }
 
@@ -57,7 +55,6 @@ public:
         zmq::message_t message(data.size());
         memcpy(message.data(), data.data(), data.size());
 
-        printf("write:%d\r\n", message.size());
         bool rc = mp_socket->send(message);
         return (rc);
     }

@@ -1,7 +1,7 @@
 #include <stdexcept>
 #include <openssl/ssl.h>
 #include <openssl/err.h>
-#include "tls_wrapper.h"
+#include "tlswrapper.h"
 #include "tlsexception.h"
 #include "zmqchannel.h"
 

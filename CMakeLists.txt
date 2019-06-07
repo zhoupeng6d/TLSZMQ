@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.14.0)
-project(TLSMQ)
+project(TLSZMQ)
 
 find_package(OpenSSL REQUIRED)
 #find_package(ZeroMQ REQUIRED)
@@ -20,15 +20,18 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 include_directories(
 ${OPENSSL_INCLUDE_DIR}/
 ${ZEROMQ_INCLUDE_DIR}/
+src/
 )
 
 set(SOURCES
-tls_wrapper.cpp
-tlsexception.cpp
+src/tlswrapper.cc
+src/tlsexception.cc
+src/tlsclient.cc
+src/tlsserver.cc
 )
 
-add_executable(server  ${SOURCES} tlsserver.cpp)
+add_executable(server  ${SOURCES} test/test_tlsserver.cc)
 target_link_libraries(server ${OPENSSL_LIBRARIES} ${ZEROMQ_LIBRARIES})
 
-add_executable(client  ${SOURCES} tlsclient.cpp)
+add_executable(client  ${SOURCES} test/test_tlsclient.cc)
 target_link_libraries(client ${OPENSSL_LIBRARIES} ${ZEROMQ_LIBRARIES})
